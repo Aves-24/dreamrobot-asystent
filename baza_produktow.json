@@ -1,0 +1,26 @@
+{
+    "flex": {
+        "1": "DHL Kleinpaket",
+        "2": "bis 1kg",
+        "3": "bis 2kg",
+        "4": "bis 3kg"
+    },
+    "v-model": {
+        "1": "DHL Kleinpaket",
+        "2": "bis 1kg",
+        "3": "bis 2kg",
+        "4": "bis 3kg"
+    },
+    "seniori": {
+        "1": "bis 1kg",
+        "2": "bis 1kg",
+        "3": "bis 1kg",
+        "4": "bis 3kg"
+    },
+    " kinderdecke babylux babydecke minky 2set kuscheldecke decke 75 x 60cm kinderwagen, babylux, mp": {
+        "1": "DHL Kleinpaket",
+        "2": "bis 1kg",
+        "3": "bis 1kg",
+        "4": "bis 1kg"
+    }
+}
