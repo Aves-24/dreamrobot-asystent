@@ -21,32 +21,54 @@ zakladka_pracownik, zakladka_manager = st.tabs(["📦 Mitarbeiter-Panel", "⚙�
 # ==========================================
 with zakladka_pracownik:
     st.header("Was soll ich auswählen?")
-    wklejony_tekst = st.text_input("Füge den kompletten Artikelnamen aus Dreamrobot hier ein:")
+    
+    # Przełącznik trybu pracy
+    tryb = st.radio("Wähle den Eingabemodus:", 
+                    ["📝 Text aus Dreamrobot einfügen", "🔍 Manuelle Produktsuche (Autovervollständigung)"], 
+                    horizontal=True)
+    
+    st.divider()
 
-    if wklejony_tekst:
-        match_ilosc = re.search(r'^(\d+)\s*[xX]', wklejony_tekst)
-        ilosc = int(match_ilosc.group(1)) if match_ilosc else 1
+    if tryb == "📝 Text aus Dreamrobot einfügen":
+        wklejony_tekst = st.text_input("Füge den kompletten Artikelnamen aus Dreamrobot hier ein:")
+
+        if wklejony_tekst:
+            match_ilosc = re.search(r'^(\d+)\s*[xX]', wklejony_tekst)
+            ilosc = int(match_ilosc.group(1)) if match_ilosc else 1
+            
+            if ilosc > 4:
+                st.warning("Achtung! Menge größer als 4. Das Ergebnis wird für 4 Stück berechnet.")
+                ilosc = 4
+
+            tekst_lower = wklejony_tekst.lower()
+            znaleziony_wynik = None
+            rozpoznany_produkt = "Unbekannt"
+
+            for klucz in st.session_state.baza_produktow.keys():
+                if klucz in tekst_lower:
+                    znaleziony_wynik = st.session_state.baza_produktow[klucz][ilosc]
+                    rozpoznany_produkt = klucz.title()
+                    break 
+
+            if znaleziony_wynik:
+                st.success(f"Erkanntes Produkt: **{rozpoznany_produkt}** | Menge: **{ilosc} Stk.**")
+                st.metric(label="Im System auswählen:", value=znaleziony_wynik)
+            else:
+                st.error("Keine Regel für dieses Produkt gefunden. Bitte den Vorgesetzten fragen!")
+
+    else: # Tryb Autocomplete
+        lista_opcji = ["-- Bitte tippen oder wählen --"] + list(st.session_state.baza_produktow.keys())
         
-        if ilosc > 4:
-            st.warning("Achtung! Menge größer als 4. Das Ergebnis wird für 4 Stück berechnet.")
-            ilosc = 4
-
-        tekst_lower = wklejony_tekst.lower()
-        znaleziony_wynik = None
-        rozpoznany_produkt = "Unbekannt"
-
-        # Dynamiczne szukanie w produktach, które dodał Manager
-        for klucz in st.session_state.baza_produktow.keys():
-            if klucz in tekst_lower:
-                znaleziony_wynik = st.session_state.baza_produktow[klucz][ilosc]
-                rozpoznany_produkt = klucz.title() # Formatowanie nazwy z dużej litery
-                break # Zatrzymuje się po znalezieniu dopasowania
-
-        if znaleziony_wynik:
-            st.success(f"Erkanntes Produkt: **{rozpoznany_produkt}** | Menge: **{ilosc} Stk.**")
+        col_auto1, col_auto2 = st.columns([3, 1])
+        with col_auto1:
+            wybrany_klucz = st.selectbox("Tippe, um das Produkt zu suchen:", lista_opcji)
+        with col_auto2:
+            ilosc_reczna = st.number_input("Menge:", min_value=1, max_value=4, value=1)
+            
+        if wybrany_klucz != "-- Bitte tippen oder wählen --":
+            znaleziony_wynik = st.session_state.baza_produktow[wybrany_klucz][ilosc_reczna]
+            st.success(f"Ausgewähltes Produkt: **{wybrany_klucz.title()}** | Menge: **{ilosc_reczna} Stk.**")
             st.metric(label="Im System auswählen:", value=znaleziony_wynik)
-        else:
-            st.error("Keine Regel für dieses Produkt gefunden. Bitte den Vorgesetzten fragen!")
 
 # ==========================================
 # ZAKŁADKA 2: KREATOR REGUŁ (MANAGER)
@@ -54,18 +76,15 @@ with zakladka_pracownik:
 with zakladka_manager:
     st.header("Regeln verwalten")
     
-    # --- SEKCJA 1: EDYCJA I USUWANIE ISTNIEJĄCYCH REGUŁ ---
     st.subheader("Aktuelle Regeln bearbeiten")
     
     if not st.session_state.baza_produktow:
         st.info("Die Liste ist leer. Füge unten neue Produkte hinzu.")
     else:
-        # Wybór produktu z listy
         lista_produktow = ["-- Wähle ein Produkt --"] + list(st.session_state.baza_produktow.keys())
         edytowany_produkt = st.selectbox("Produkt zum Bearbeiten oder Löschen auswählen:", lista_produktow)
         
         if edytowany_produkt != "-- Wähle ein Produkt --":
-            # Pobieranie aktualnych wartości, by pokazały się w dropdownach
             akt = st.session_state.baza_produktow[edytowany_produkt]
             idx_1 = opcje_dhl.index(akt[1]) if akt[1] in opcje_dhl else 0
             idx_2 = opcje_dhl.index(akt[2]) if akt[2] in opcje_dhl else 0
@@ -88,7 +107,7 @@ with zakladka_manager:
                 if st.button("Änderungen speichern", type="primary"):
                     st.session_state.baza_produktow[edytowany_produkt] = {1: e_wybor_1, 2: e_wybor_2, 3: e_wybor_3, 4: e_wybor_4}
                     st.success("Aktualisiert!")
-                    st.rerun() # Odświeża stronę, by pokazać zmiany
+                    st.rerun()
             with col_usun:
                 if st.button("Produkt löschen"):
                     del st.session_state.baza_produktow[edytowany_produkt]
@@ -97,7 +116,6 @@ with zakladka_manager:
     
     st.divider()
 
-    # --- SEKCJA 2: DODAWANIE NOWYCH REGUŁ ---
     st.subheader("Neues Produkt hinzufügen")
     nowa_nazwa = st.text_input("Schlüsselwort im Namen (z.B. 'windschutz'):").lower()
     
