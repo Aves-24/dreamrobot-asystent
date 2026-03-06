@@ -1,15 +1,50 @@
 import streamlit as st
 import re
+import json
+from github import Github
 
 st.set_page_config(page_title="Versandassistent Dreamrobot", layout="wide")
 
-# --- WISSENSBATT / BAZA WIEDZY ---
+# --- KONFIGURACJA ZAPISU DO CHMURY ---
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+REPO_NAME = st.secrets["REPO_NAME"]
+FILE_PATH = "baza_produktow.json"
+
+@st.cache_data(ttl=30)
+def pobierz_baze():
+    try:
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(REPO_NAME)
+        file_content = repo.get_contents(FILE_PATH)
+        baza_z_chmury = json.loads(file_content.decoded_content.decode("utf-8"))
+        
+        # Konwersja formatu po pobraniu (JSON zapisuje klucze ilości jako tekst)
+        baza_poprawiona = {}
+        for produkt, reguly in baza_z_chmury.items():
+            baza_poprawiona[produkt] = {int(k): v for k, v in reguly.items()}
+        return baza_poprawiona
+    except Exception as e:
+        # Jeśli plik jeszcze nie istnieje, program załaduje te 3 startowe reguły
+        return {
+            "flex": {1: "DHL Kleinpaket", 2: "bis 1kg", 3: "bis 2kg", 4: "bis 3kg"},
+            "v-model": {1: "DHL Kleinpaket", 2: "bis 1kg", 3: "bis 2kg", 4: "bis 3kg"},
+            "seniori": {1: "bis 1kg", 2: "bis 1kg", 3: "bis 1kg", 4: "bis 3kg"} 
+        }
+
+def zapisz_baze(nowa_baza):
+    g = Github(GITHUB_TOKEN)
+    repo = g.get_repo(REPO_NAME)
+    baza_do_zapisu = json.dumps(nowa_baza, indent=4)
+    
+    try:
+        file = repo.get_contents(FILE_PATH)
+        repo.update_file(FILE_PATH, "Aktualizacja reguł przez Managera", baza_do_zapisu, file.sha)
+    except:
+        repo.create_file(FILE_PATH, "Utworzenie pierwszej bazy", baza_do_zapisu)
+    pobierz_baze.clear() # Wymusza odświeżenie danych z chmury po zapisie
+
 if 'baza_produktow' not in st.session_state:
-    st.session_state.baza_produktow = {
-        "flex": {1: "DHL Kleinpaket", 2: "bis 1kg", 3: "bis 2kg", 4: "bis 3kg"},
-        "v-model": {1: "DHL Kleinpaket", 2: "bis 1kg", 3: "bis 2kg", 4: "bis 3kg"},
-        "seniori": {1: "bis 1kg", 2: "bis 1kg", 3: "bis 1kg", 4: "bis 3kg"} 
-    }
+    st.session_state.baza_produktow = pobierz_baze()
 
 opcje_dhl = ["DHL Kleinpaket", "bis 1kg", "bis 2kg", "bis 3kg", "bis 5kg", "bis 10kg", "bis 16kg", "bis 20kg", "bis 30kg", "bis 31,5kg"]
 
@@ -22,11 +57,9 @@ zakladka_pracownik, zakladka_manager = st.tabs(["📦 Mitarbeiter-Panel", "⚙�
 with zakladka_pracownik:
     st.header("Was soll ich auswählen?")
     
-    # Przełącznik trybu pracy
     tryb = st.radio("Wähle den Eingabemodus:", 
                     ["📝 Text aus Dreamrobot einfügen", "🔍 Manuelle Produktsuche (Autovervollständigung)"], 
                     horizontal=True)
-    
     st.divider()
 
     if tryb == "📝 Text aus Dreamrobot einfügen":
@@ -56,7 +89,7 @@ with zakladka_pracownik:
             else:
                 st.error("Keine Regel für dieses Produkt gefunden. Bitte den Vorgesetzten fragen!")
 
-    else: # Tryb Autocomplete
+    else:
         lista_opcji = ["-- Bitte tippen oder wählen --"] + list(st.session_state.baza_produktow.keys())
         
         col_auto1, col_auto2 = st.columns([3, 1])
@@ -75,7 +108,6 @@ with zakladka_pracownik:
 # ==========================================
 with zakladka_manager:
     st.header("Regeln verwalten")
-    
     st.subheader("Aktuelle Regeln bearbeiten")
     
     if not st.session_state.baza_produktow:
@@ -106,11 +138,13 @@ with zakladka_manager:
             with col_zapisz:
                 if st.button("Änderungen speichern", type="primary"):
                     st.session_state.baza_produktow[edytowany_produkt] = {1: e_wybor_1, 2: e_wybor_2, 3: e_wybor_3, 4: e_wybor_4}
-                    st.success("Aktualisiert!")
+                    zapisz_baze(st.session_state.baza_produktow)
+                    st.success("Aktualisiert und sicher in der Cloud gespeichert!")
                     st.rerun()
             with col_usun:
                 if st.button("Produkt löschen"):
                     del st.session_state.baza_produktow[edytowany_produkt]
+                    zapisz_baze(st.session_state.baza_produktow)
                     st.warning("Produkt wurde gelöscht!")
                     st.rerun()
     
@@ -137,7 +171,8 @@ with zakladka_manager:
                 st.session_state.baza_produktow[nowa_nazwa] = {
                     1: wybor_1, 2: wybor_2, 3: wybor_3, 4: wybor_4
                 }
-                st.success(f"Regel für '{nowa_nazwa}' hinzugefügt!")
+                zapisz_baze(st.session_state.baza_produktow)
+                st.success(f"Regel für '{nowa_nazwa}' sicher gespeichert!")
                 st.rerun()
         else:
             st.error("Bitte gib ein Schlüsselwort ein.")
